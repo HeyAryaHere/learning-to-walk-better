@@ -7,108 +7,102 @@ import numpy as np
 
 print("============================================================================================")
 
-
 ################################### Training ###################################
 
+####### Initialize environment hyperparameters ######
 
-####### initialize environment hyperparameters ######
+env_name = "CartPole-v1"  # Name of the environment
+has_continuous_action_space = False  # Whether the action space is continuous
 
-env_name = "CartPole-v1"
-has_continuous_action_space = False
+max_ep_len = 400  # Maximum timesteps in one episode
+max_training_timesteps = int(1e5)  # Stop training if timesteps exceed this number
 
-max_ep_len = 400                    # max timesteps in one episode
-max_training_timesteps = int(1e5)   # break training loop if timeteps > max_training_timesteps
+# Frequencies for various activities (in terms of timesteps)
+print_freq = max_ep_len * 4  # Frequency of printing average reward
+log_freq = max_ep_len * 2  # Frequency of logging average reward
+save_model_freq = int(2e4)  # Frequency of saving the model
 
-print_freq = max_ep_len * 4     # print avg reward in the interval (in num timesteps)
-log_freq = max_ep_len * 2       # log avg reward in the interval (in num timesteps)
-save_model_freq = int(2e4)      # save model frequency (in num timesteps)
-
-action_std = None
-
+action_std = None  # Standard deviation for action, if needed for continuous actions
 
 #####################################################
 
-
-## Note : print/log frequencies should be > than max_ep_len
-
+# Ensure print/log frequencies are greater than max_ep_len
+assert print_freq > max_ep_len
+assert log_freq > max_ep_len
 
 ################ PPO hyperparameters ################
 
+update_timestep = max_ep_len * 4  # Update policy every n timesteps
+K_epochs = 40  # Number of epochs for policy update
+eps_clip = 0.2  # Clipping parameter for PPO
+gamma = 0.99  # Discount factor for reward
 
-update_timestep = max_ep_len * 4      # update policy every n timesteps
-K_epochs = 40               # update policy for K epochs
-eps_clip = 0.2              # clip parameter for PPO
-gamma = 0.99                # discount factor
+# Learning rates for the actor and critic networks
+lr_actor = 0.0003  
+lr_critic = 0.001  
 
-lr_actor = 0.0003       # learning rate for actor network
-lr_critic = 0.001       # learning rate for critic network
-
-random_seed = 0         # set random seed if required (0 = no random seed)
+random_seed = 0  # Set random seed if required (0 means no random seed)
 
 #####################################################
 
+print("Training environment name: " + env_name)
 
+env = gym.make(env_name)  # Initialize the environment
 
-print("training environment name : " + env_name)
-
-env = gym.make(env_name)
-
-# state space dimension
+# State space dimension
 state_dim = env.observation_space.shape[0]
 
-# action space dimension
+# Action space dimension
 if has_continuous_action_space:
     action_dim = env.action_space.shape[0]
 else:
     action_dim = env.action_space.n
 
+###################### Logging ######################
 
-
-###################### logging ######################
-
-#### log files for multiple runs are NOT overwritten
-
+# Directory for logging
 log_dir = "PPO_logs"
 if not os.path.exists(log_dir):
-      os.makedirs(log_dir)
+    os.makedirs(log_dir)
 
+# Directory for environment-specific logs
 log_dir = log_dir + '/' + env_name + '/'
 if not os.path.exists(log_dir):
-      os.makedirs(log_dir)
+    os.makedirs(log_dir)
 
+# Determine the run number by counting existing log files
+run_num = len(next(os.walk(log_dir))[2])
 
-#### get number of log files in log directory
-run_num = 0
-current_num_files = next(os.walk(log_dir))[2]
-run_num = len(current_num_files)
-
-
-#### create new log file for each run 
+# Create a new log file for each run
 log_f_name = log_dir + '/PPO_' + env_name + "_log_" + str(run_num) + ".csv"
 
-print("current logging run number for " + env_name + " : ", run_num)
-print("logging at : " + log_f_name)
+print("Current logging run number for " + env_name + ": ", run_num)
+print("Logging at: " + log_f_name)
 
 #####################################################
 
 
-################### checkpointing ###################
+################### Checkpointing ###################
 
-run_num_pretrained = 0      #### change this to prevent overwriting weights in same env_name folder
+# Run number for pre-trained model to prevent overwriting existing weights
+run_num_pretrained = 0  # Change this value as needed to avoid overwriting
 
+# Directory for saving pre-trained models
 directory = "PPO_preTrained"
 if not os.path.exists(directory):
-      os.makedirs(directory)
+    os.makedirs(directory)
 
+# Subdirectory for the specific environment
 directory = directory + '/' + env_name + '/'
 if not os.path.exists(directory):
-      os.makedirs(directory)
+    os.makedirs(directory)
 
-
+# Path for saving the checkpoint
 checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
-print("save checkpoint path : " + checkpoint_path)
+print("Save checkpoint path: " + checkpoint_path)
 
 #####################################################
+
 
 
 ############# print all hyperparameters #############
@@ -163,25 +157,21 @@ if random_seed:
 
 print("============================================================================================")
 
-################# training procedure ################
+################# Training Procedure ################
 
-# initialize a PPO agent
+# Initialize a PPO agent with the specified hyperparameters
 ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, has_continuous_action_space, action_std)
 
-
-# track total training time
+# Track the total training time
 start_time = datetime.now().replace(microsecond=0)
-print("Started training at (GMT) : ", start_time)
-
+print("Started training at (IST): ", start_time)
 print("============================================================================================")
 
-
-# logging file
-log_f = open(log_f_name,"w+")
+# Create and open a log file for writing
+log_f = open(log_f_name, "w+")
 log_f.write('episode,timestep,reward\n')
 
-
-# printing and logging variables
+# Variables for tracking running rewards and episodes for printing and logging
 print_running_reward = 0
 print_running_episodes = 0
 
@@ -191,38 +181,35 @@ log_running_episodes = 0
 time_step = 0
 i_episode = 0
 
-
-# training loop
+# Training loop
 while time_step <= max_training_timesteps:
     
     state = env.reset()
     current_ep_reward = 0
 
-    for t in range(1, max_ep_len+1):
+    for t in range(1, max_ep_len + 1):
         
-        # select action with policy
+        # Select action according to policy
         action = ppo_agent.select_action(state)
         state, reward, done, _ = env.step(action)
         
-        # saving reward and is_terminals
+        # Save reward and terminal state
         ppo_agent.buffer.rewards.append(reward)
         ppo_agent.buffer.is_terminals.append(done)
         
-        time_step +=1
+        time_step += 1
         current_ep_reward += reward
 
-        # update PPO agent
+        # Update PPO agent at specified intervals
         if time_step % update_timestep == 0:
             ppo_agent.update()
 
-        # if continuous action space; then decay action std of ouput action distribution
+        # Decay action standard deviation if the action space is continuous
         if has_continuous_action_space and time_step % action_std_decay_freq == 0:
             ppo_agent.decay_action_std(action_std_decay_rate, min_action_std)
 
-        # log in logging file
+        # Log average reward at specified intervals
         if time_step % log_freq == 0:
-
-            # log average reward till last episode
             log_avg_reward = log_running_reward / log_running_episodes
             log_avg_reward = round(log_avg_reward, 4)
 
@@ -232,28 +219,26 @@ while time_step <= max_training_timesteps:
             log_running_reward = 0
             log_running_episodes = 0
 
-        # printing average reward
+        # Print average reward at specified intervals
         if time_step % print_freq == 0:
-
-            # print average reward till last episode
             print_avg_reward = print_running_reward / print_running_episodes
             print_avg_reward = round(print_avg_reward, 2)
 
-            print("Episode : {} \t\t Timestep : {} \t\t Average Reward : {}".format(i_episode, time_step, print_avg_reward))
+            print("Episode: {} \t\t Timestep: {} \t\t Average Reward: {}".format(i_episode, time_step, print_avg_reward))
 
             print_running_reward = 0
             print_running_episodes = 0
             
-        # save model weights
+        # Save model weights at specified intervals
         if time_step % save_model_freq == 0:
             print("--------------------------------------------------------------------------------------------")
-            print("saving model at : " + checkpoint_path)
+            print("Saving model at: " + checkpoint_path)
             ppo_agent.save(checkpoint_path)
-            print("model saved")
-            print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
+            print("Model saved")
+            print("Elapsed Time: ", datetime.now().replace(microsecond=0) - start_time)
             print("--------------------------------------------------------------------------------------------")
             
-        # break; if the episode is over
+        # End the episode if done
         if done:
             break
 
@@ -265,17 +250,14 @@ while time_step <= max_training_timesteps:
 
     i_episode += 1
 
-
 log_f.close()
 env.close()
-
-
 
 
 # print total training time
 print("============================================================================================")
 end_time = datetime.now().replace(microsecond=0)
-print("Started training at (GMT) : ", start_time)
-print("Finished training at (GMT) : ", end_time)
+print("Started training at (IST) : ", start_time)
+print("Finished training at (IST) : ", end_time)
 print("Total training time  : ", end_time - start_time)
 print("============================================================================================")
